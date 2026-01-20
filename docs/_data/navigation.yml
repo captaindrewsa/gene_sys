@@ -1,0 +1,9 @@
+docs:
+  - title: "Главная"
+    url: "/"
+    
+  - title: "Руководство"
+    children:
+      - title: "Как делать пуши и Pull Requests"
+        url: "/context/contributing"
+        
