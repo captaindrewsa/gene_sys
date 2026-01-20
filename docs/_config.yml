@@ -4,6 +4,3 @@ remote_theme: pmarsceill/just-the-docs
 plugins:
   - jekyll-remote-theme
 color_scheme: nord
-heading_links: true        
-back_to_top: true   
-back_to_top_text: "↑"
