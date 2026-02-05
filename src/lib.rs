@@ -1,7 +1,7 @@
-mod business_logic;
-mod database;
-mod parcing;
-mod cli;
+pub mod business_logic;
+pub mod database;
+pub mod parcing;
+pub mod cli;
 
 pub mod interfaces{
     pub trait IDatabase{
