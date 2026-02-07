@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Контрибютеру
-permalink: /contributing/
+permalink: /contributing.html
 ---
 # Контрибьютинг
 
