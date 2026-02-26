@@ -48,3 +48,46 @@ impl Parser{
         Ok(html)
     }
 }
+
+
+// Тесты
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    
+    #[tokio::test]
+    // Проверка получения данных
+    async fn test_fetch_correct_url() {
+        let path = "/entry/ec:5.4.2.2"; // phosphoglucomutase
+        let parser = Parser::new();
+
+        let result = parser.fetch_html(path).await;
+    
+        assert!(result.is_ok(), "Тест провален: Не удалось получить страницу HTML!");
+        
+        let html = result.unwrap();
+        
+        assert!(!html.is_empty(), "Тест провален: HTML пришел пустым!");
+
+        assert!(html.contains("phosphoglycerate") || html.contains("phosphoglucomutase"), 
+                "Тест провален: Полученная страница не сожержит название фермента");
+        
+        println!("Тест пройден: Получено {} байт", html.len());
+        println!()
+    }
+    
+    #[tokio::test]
+    async fn test_fetch_incorrect_url() {
+        let path = "/entry/non_existent_12345"; // несуществующая страница
+        let parser = Parser::new();
+
+        let result = parser.fetch_html(path).await;
+        
+        assert!(result.is_err(), "Тест провален: Функция должна была вернуть ошибку, но получила данные");
+        
+        if let Err(e) = result {
+            println!("Тест пройден: Получена ожидаемая ошибка: {}", e);
+        }
+    }
+}
