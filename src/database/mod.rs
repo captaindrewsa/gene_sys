@@ -1,5 +1,4 @@
 use sqlx::{migrate::MigrateDatabase, Connection, Sqlite, SqliteConnection, SqlitePool};
-use serde::{Serialize, Deserialize};
 use std::fs;
 
 // URL БД
@@ -7,6 +6,16 @@ const DB_URL: &str = "sqlite://my_database.db";
 
 /// Путь к SQL-скрипту для инициализации схемы
 const SCHEMA_SQL_PATH: &str = "src/database/sql/create_DB.sql";
+
+// Объявляем подмодули, содержащие структуры и их методы
+mod compound;
+mod enzyme;
+mod reaction;
+
+// Реэкспортируем структуры, чтобы они были доступны извне как database::Compound и т.д.
+pub use compound::Compound;
+pub use enzyme::Enzyme;
+pub use reaction::Reaction;
 
 /// Просто функция для демонстарции архитектуры тестирования 
 pub fn first_fn()-> i32{
@@ -17,35 +26,6 @@ pub fn first_fn()-> i32{
 /// и на которую навешиваются все функции
 pub struct DataBase{
     pool: SqlitePool, // пул для соединений для выполнения запросов к БД
-}
-
-// Основные структуры даннных
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Compound {
-    pub entry: String,
-    pub formula: Option<String>,
-    pub exact_mass: Option<f64>,
-    pub mol_weight: Option<f64>,
-    pub names: Vec<String>,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Enzyme {
-    pub entry: String,
-    pub sysname: Option<String>,
-    pub reaction_iubmb: Option<String>,
-    pub names: Vec<String>,
-    pub substrates: Vec<String>,
-    pub products: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Reaction {
-    pub entry: String,
-    pub name: Option<String>,
-    pub definition: Option<String>,
-    pub enzymes: Vec<String>,
-    pub left_compounds: Vec<String>, // entry соединений слева
-    pub right_compounds: Vec<String>, // entry соединений справа
 }
 
 impl DataBase{
@@ -83,146 +63,6 @@ impl DataBase{
         sqlx::query("PRAGMA foreign_keys = ON;").execute(&mut conn).await?;
         sqlx::query(&script).execute(&mut conn).await?;
         println!("Schema script executed successfully.");
-        Ok(())
-    }
-
-    // ==================== POST функции ====================
-
-    /// Вставка Compound и связанных с ним имен
-    pub async fn post_compound(&self, compound: Compound) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-
-        // Вставка в таблицу compound
-        sqlx::query(
-            "INSERT INTO compound (entry, formula, exact_mass, mol_weight) 
-             VALUES (?, ?, ?, ?)"
-        )
-        .bind(&compound.entry)
-        .bind(&compound.formula)
-        .bind(compound.exact_mass)
-        .bind(compound.mol_weight)
-        .execute(&mut *tx)
-        .await?;
-
-        // Вставка имен в таблицу compound_names
-        for name in &compound.names {
-            sqlx::query(
-                "INSERT INTO compound_names (entry, name) VALUES (?, ?)"
-            )
-            .bind(&compound.entry)
-            .bind(name)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        tx.commit().await?;
-        println!("Compound {} inserted successfully", compound.entry);
-        Ok(())
-    }
-
-    /// Вставка Enzyme и связанных с ним данных (имена, субстраты, продукты)
-    pub async fn post_enzyme(&self, enzyme: Enzyme) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-
-        // Вставка в таблицу enzyme
-        sqlx::query(
-            "INSERT INTO enzyme (entry, sysname, reaction_iubmb) 
-             VALUES (?, ?, ?)"
-        )
-        .bind(&enzyme.entry)
-        .bind(&enzyme.sysname)
-        .bind(&enzyme.reaction_iubmb)
-        .execute(&mut *tx)
-        .await?;
-
-        // Вставка имен в таблицу enzyme_names
-        for name in &enzyme.names {
-            sqlx::query(
-                "INSERT INTO enzyme_names (entry, name) VALUES (?, ?)"
-            )
-            .bind(&enzyme.entry)
-            .bind(name)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        // Вставка субстратов в таблицу substrate
-        for substrate_entry in &enzyme.substrates {
-            sqlx::query(
-                "INSERT INTO substrate (comp_entry, enzyme_entry) VALUES (?, ?)"
-            )
-            .bind(substrate_entry)
-            .bind(&enzyme.entry)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        // Вставка продуктов в таблицу product
-        for product_entry in &enzyme.products {
-            sqlx::query(
-                "INSERT INTO product (comp_entry, enzyme_entry) VALUES (?, ?)"
-            )
-            .bind(product_entry)
-            .bind(&enzyme.entry)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        tx.commit().await?;
-        println!("Enzyme {} inserted successfully", enzyme.entry);
-        Ok(())
-    }
-
-    /// Вставка Reaction и связанных с ним данных (ферменты, левые и правые части)
-    pub async fn post_reaction(&self, reaction: Reaction) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-
-        // Вставка в таблицу reaction
-        sqlx::query(
-            "INSERT INTO reaction (entry, name, definition) 
-             VALUES (?, ?, ?)"
-        )
-        .bind(&reaction.entry)
-        .bind(&reaction.name)
-        .bind(&reaction.definition)
-        .execute(&mut *tx)
-        .await?;
-
-        // Вставка связей с ферментами в таблицу reaction_enzyme
-        for enzyme_entry in &reaction.enzymes {
-            sqlx::query(
-                "INSERT INTO reaction_enzyme (react_entry, enzyme_entry) VALUES (?, ?)"
-            )
-            .bind(&reaction.entry)
-            .bind(enzyme_entry)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        // Вставка левых частей уравнения в таблицу equation_left
-        for comp_entry in &reaction.left_compounds {
-            sqlx::query(
-                "INSERT INTO equation_left (react_entry, comp_entry) VALUES (?, ?)"
-            )
-            .bind(&reaction.entry)
-            .bind(comp_entry)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        // Вставка правых частей уравнения в таблицу equation_right
-        for comp_entry in &reaction.right_compounds {
-            sqlx::query(
-                "INSERT INTO equation_right (react_entry, comp_entry) VALUES (?, ?)"
-            )
-            .bind(&reaction.entry)
-            .bind(comp_entry)
-            .execute(&mut *tx)
-            .await?;
-        }
-
-        tx.commit().await?;
-        println!("Reaction {} inserted successfully", reaction.entry);
         Ok(())
     }
 
@@ -313,5 +153,4 @@ mod db_test{
         let result = db.post_reaction(reaction).await;
         assert!(result.is_ok(), "Reaction insertion failed: {:?}", result.err());
     }
-
 }
