@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 sqlx = "0.8.6"
+reqwest = "0.11"
 
 [[bin]]
 name = "gene_sys"
