@@ -9,15 +9,15 @@ impl Parser{
     /// Новый экземпляр Parser
     pub fn new() -> Self {
         Self {
-            base_url: String::from("https://www.genome.jp"),
+            base_url: String::from("https://rest.kegg.jp"),
         }
     }
 
     /// Загрузка HTML по пути
     pub async fn fetch_html(&self, path: &str) -> Result<String, String> {
         
-        // Собираем полный URL, например  = https://www.genome.jp + /entry/ec:5.4.2.2
-        let url = format!("{}{}", self.base_url, path); 
+        // Собираем полный URL, например  = https://rest.kegg.jp/get/ + ec:5.4.2.2
+        let url = format!("{}/get/{}", self.base_url, path); 
         // println!("Пытаюсь запросить: {}", url);
 
         // Создаём клиент
@@ -41,7 +41,7 @@ impl Parser{
             .map_err(|e| format!("Ошибка при чтении ответа: {}", e))?;      // если ошибка, преобразуем ее в строку
         
         if html.contains("No such data was found") {
-            return Err(format!("Ошибка: Для указанного запроса '{}' данные не найдены", path));
+            return Err(format!("Ошибка! Для указанного запроса '{}' данные не найдены", path));
         }
 
         // println!("Успешно загружено {} байт", html.len());
@@ -59,27 +59,27 @@ mod tests {
     #[tokio::test]
     // Проверка получения данных
     async fn test_fetch_correct_url() {
-        let path = "/entry/ec:5.4.2.2"; // phosphoglucomutase
+        let path = "ec:5.4.2.2"; // phosphoglucomutase
         let parser = Parser::new();
 
         let result = parser.fetch_html(path).await;
     
-        assert!(result.is_ok(), "Тест провален: Не удалось получить страницу HTML!");
+        assert!(result.is_ok(), "Тест провален! Не удалось получить страницу HTML!");
         
         let html = result.unwrap();
         
-        assert!(!html.is_empty(), "Тест провален: HTML пришел пустым!");
+        assert!(!html.is_empty(), "Тест провален! HTML пришел пустым!");
 
         assert!(html.contains("phosphoglycerate") || html.contains("phosphoglucomutase"), 
-                "Тест провален: Полученная страница не сожержит название фермента");
+                "Тест провален! Полученная страница не сожержит название фермента");
         
-        println!("Тест пройден: Получено {} байт", html.len());
+        println!("Тест пройден! Получено {} байт", html.len());
         println!()
     }
     
     #[tokio::test]
     async fn test_fetch_incorrect_url() {
-        let path = "/entry/non_existent_12345"; // несуществующая страница
+        let path = "non_existent_12345"; // несуществующая страница
         let parser = Parser::new();
 
         let result = parser.fetch_html(path).await;
@@ -87,7 +87,7 @@ mod tests {
         assert!(result.is_err(), "Тест провален: Функция должна была вернуть ошибку, но получила данные");
         
         if let Err(e) = result {
-            println!("Тест пройден: Получена ожидаемая ошибка: {}", e);
+            println!("Тест пройден! Получена ожидаемая ошибка: {}", e);
         }
     }
 }
