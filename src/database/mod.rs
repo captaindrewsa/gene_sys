@@ -153,4 +153,186 @@ mod db_test{
         let result = db.post_reaction(reaction).await;
         assert!(result.is_ok(), "Reaction insertion failed: {:?}", result.err());
     }
+
+    #[tokio::test]
+    async fn test_update_compound() {
+        let db = DataBase::new().await.unwrap();
+
+        let compound = Compound {
+            entry: "C99999".to_string(),
+            formula: Some("H2O".to_string()),
+            exact_mass: Some(18.0106),
+            mol_weight: Some(18.0153),
+            names: vec!["Water".to_string()],
+        };
+        db.post_compound(compound.clone()).await.unwrap();
+
+
+        let updated = Compound {
+            entry: "C99999".to_string(),
+            formula: Some("H2O2026".to_string()),
+            exact_mass: Some(29.0106),
+            mol_weight: Some(38.0153),
+            names: vec!["Water".to_string(), "Dihydrogen oxide".to_string()],
+        };
+        let result = db.update_compound(updated).await;
+        assert!(matches!(result, Ok(())));
+    }
+
+    #[tokio::test]
+    async fn test_update_enzyme() {
+        let db = DataBase::new().await.unwrap();
+
+        // Сначала вставим необходимые соединения
+        let comp1 = Compound {
+            entry: "C10001".to_string(),
+            formula: Some("C6H12O6".to_string()),
+            exact_mass: Some(180.0634),
+            mol_weight: Some(180.156),
+            names: vec!["Glucose".to_string()],
+        };
+        db.post_compound(comp1).await.unwrap();
+
+        let comp2 = Compound {
+            entry: "C10002".to_string(),
+            formula: Some("C6H12O6".to_string()),
+            exact_mass: Some(180.0634),
+            mol_weight: Some(180.156),
+            names: vec!["Glucose-6-phosphate".to_string()],
+        };
+        db.post_compound(comp2).await.unwrap();
+
+        // Вставляем исходный enzyme
+        let enzyme = Enzyme {
+            entry: "EC:2.7.1.2".to_string(),
+            sysname: Some("ATP:glucose 6-phosphotransferase".to_string()),
+            reaction_iubmb: Some("ATP + glucose = ADP + glucose-6-phosphate".to_string()),
+            names: vec!["Glucokinase".to_string()],
+            substrates: vec!["C10001".to_string()],
+            products: vec!["C10002".to_string()],
+        };
+        db.post_enzyme(enzyme).await.unwrap();
+
+        let comp3 = Compound {
+            entry: "C10003".to_string(),
+            formula: Some("C6H12O6".to_string()),
+            exact_mass: Some(180.0634),
+            mol_weight: Some(180.156),
+            names: vec!["Mannose".to_string()],
+        };
+        db.post_compound(comp3).await.unwrap();
+
+        let comp4 = Compound {
+            entry: "C10004".to_string(),
+            formula: Some("C6H13O9P".to_string()),
+            exact_mass: Some(260.0297),
+            mol_weight: Some(260.136),
+            names: vec!["Mannose-6-phosphate".to_string()],
+        };
+        db.post_compound(comp4).await.unwrap();
+
+        let updated_enzyme = Enzyme {
+            entry: "EC:2.7.1.2".to_string(),
+            sysname: Some("ATP:glucose 6-phosphotransferase".to_string()),
+            reaction_iubmb: Some("ATP + glucose = ADP + glucose-6-phosphate".to_string()),
+            names: vec!["Glucokinase".to_string(), "Hexokinase type IV".to_string()],
+            substrates: vec!["C10001".to_string(), "C10003".to_string()],
+            products: vec!["C10002".to_string(), "C10004".to_string()],
+        };
+
+        let result = db.update_enzyme(updated_enzyme).await;
+        assert!(matches!(result, Ok(())));
+    }
+
+    #[tokio::test]
+    async fn test_update_reaction() {
+        let db = DataBase::new().await.unwrap();
+
+        let comp1 = Compound {
+            entry: "C20001".to_string(),
+            formula: Some("ATP".to_string()),
+            exact_mass: None,
+            mol_weight: None,
+            names: vec!["ATP".to_string()],
+        };
+        db.post_compound(comp1).await.unwrap();
+
+        let comp2 = Compound {
+            entry: "C20002".to_string(),
+            formula: Some("ADP".to_string()),
+            exact_mass: None,
+            mol_weight: None,
+            names: vec!["ADP".to_string()],
+        };
+        db.post_compound(comp2).await.unwrap();
+
+        let comp3 = Compound {
+            entry: "C20003".to_string(),
+            formula: Some("Glucose".to_string()),
+            exact_mass: None,
+            mol_weight: None,
+            names: vec!["Glucose".to_string()],
+        };
+        db.post_compound(comp3).await.unwrap();
+
+        let comp4 = Compound {
+            entry: "C20004".to_string(),
+            formula: Some("Glucose-6-phosphate".to_string()),
+            exact_mass: None,
+            mol_weight: None,
+            names: vec!["Glucose-6-phosphate".to_string()],
+        };
+        db.post_compound(comp4).await.unwrap();
+
+        let enzyme = Enzyme {
+            entry: "EC:2.7.1.3".to_string(),
+            sysname: Some("ATP:glucose 6-phosphotransferase".to_string()),
+            reaction_iubmb: None,
+            names: vec!["Hexokinase".to_string()],
+            substrates: vec!["C20001".to_string(), "C20003".to_string()],
+            products: vec!["C20002".to_string(), "C20004".to_string()],
+        };
+        db.post_enzyme(enzyme).await.unwrap();
+
+        let reaction = Reaction {
+            entry: "R10001".to_string(),
+            name: Some("Hexokinase reaction".to_string()),
+            definition: Some("ATP + D-glucose = ADP + D-glucose 6-phosphate".to_string()),
+            enzymes: vec!["EC:2.7.1.3".to_string()],
+            left_compounds: vec!["C20001".to_string(), "C20003".to_string()],
+            right_compounds: vec!["C20002".to_string(), "C20004".to_string()],
+        };
+        db.post_reaction(reaction).await.unwrap();
+
+        let enzyme2 = Enzyme {
+            entry: "EC:2.7.1.4".to_string(),
+            sysname: Some("ATP:glucose 6-phosphotransferase (alternative)".to_string()),
+            reaction_iubmb: None,
+            names: vec!["Glucokinase".to_string()],
+            substrates: vec!["C20001".to_string(), "C20003".to_string()],
+            products: vec!["C20002".to_string(), "C20004".to_string()],
+        };
+        db.post_enzyme(enzyme2).await.unwrap();
+
+        let water = Compound {
+            entry: "C20005".to_string(),
+            formula: Some("H2O".to_string()),
+            exact_mass: Some(18.0106),
+            mol_weight: Some(18.0153),
+            names: vec!["Water".to_string()],
+        };
+        db.post_compound(water).await.unwrap();
+
+        let updated_reaction = Reaction {
+            entry: "R10001".to_string(),
+            name: Some("Hexokinase reaction (updated)".to_string()),
+            definition: Some("ATP + D-glucose = ADP + D-glucose 6-phosphate".to_string()),
+            enzymes: vec!["EC:2.7.1.3".to_string(), "EC:2.7.1.4".to_string()],
+            left_compounds: vec!["C20001".to_string(), "C20003".to_string(), "C20005".to_string()],
+            right_compounds: vec!["C20004".to_string(), "C20005".to_string()],
+        };
+
+        let result = db.update_reaction(updated_reaction).await;
+        assert!(matches!(result, Ok(())));
+    }
 }

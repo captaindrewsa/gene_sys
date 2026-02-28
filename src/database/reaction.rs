@@ -61,4 +61,71 @@ impl DataBase {
         println!("Reaction {} inserted successfully", reaction.entry);
         Ok(())
     }
+
+     /// Обновление Reaction и связанных данных
+    pub async fn update_reaction(&self, reaction: Reaction) -> Result<(), Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // Проверка существования
+        let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reaction WHERE entry = ?")
+            .bind(&reaction.entry)
+            .fetch_one(&mut *tx)
+            .await?;
+        if exists.0 == 0 {
+            return Ok(());
+        }
+
+        // Обновление основных полей
+        sqlx::query("UPDATE reaction SET name = ?, definition = ? WHERE entry = ?")
+            .bind(&reaction.name)
+            .bind(&reaction.definition)
+            .bind(&reaction.entry)
+            .execute(&mut *tx)
+            .await?;
+
+        // Удаляем старые связи
+        sqlx::query("DELETE FROM reaction_enzyme WHERE react_entry = ?")
+            .bind(&reaction.entry)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM equation_left WHERE react_entry = ?")
+            .bind(&reaction.entry)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM equation_right WHERE react_entry = ?")
+            .bind(&reaction.entry)
+            .execute(&mut *tx)
+            .await?;
+
+        // Вставляем ферменты
+        for enzyme_entry in &reaction.enzymes {
+            sqlx::query("INSERT INTO reaction_enzyme (react_entry, enzyme_entry) VALUES (?, ?)")
+                .bind(&reaction.entry)
+                .bind(enzyme_entry)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Вставляем левые соединения
+        for comp_entry in &reaction.left_compounds {
+            sqlx::query("INSERT INTO equation_left (react_entry, comp_entry) VALUES (?, ?)")
+                .bind(&reaction.entry)
+                .bind(comp_entry)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Вставляем правые соединения
+        for comp_entry in &reaction.right_compounds {
+            sqlx::query("INSERT INTO equation_right (react_entry, comp_entry) VALUES (?, ?)")
+                .bind(&reaction.entry)
+                .bind(comp_entry)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        println!("Reaction {} updated successfully", reaction.entry);
+        Ok(())
+    }
 }

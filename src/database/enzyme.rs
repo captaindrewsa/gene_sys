@@ -61,4 +61,73 @@ impl DataBase {
         println!("Enzyme {} inserted successfully", enzyme.entry);
         Ok(())
     }
+
+    /// Обновление Enzyme и связанных данных
+    pub async fn update_enzyme(&self, enzyme: Enzyme) -> Result<(), Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // Проверка существования
+        let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM enzyme WHERE entry = ?")
+            .bind(&enzyme.entry)
+            .fetch_one(&mut *tx)
+            .await?;
+        if exists.0 == 0 {
+            return Ok(());
+        }
+
+        // Обновление основных полей
+        sqlx::query("UPDATE enzyme SET sysname = ?, reaction_iubmb = ? WHERE entry = ?")
+            .bind(&enzyme.sysname)
+            .bind(&enzyme.reaction_iubmb)
+            .bind(&enzyme.entry)
+            .execute(&mut *tx)
+            .await?;
+
+        // Удаляем старые имена
+        sqlx::query("DELETE FROM enzyme_names WHERE entry = ?")
+            .bind(&enzyme.entry)
+            .execute(&mut *tx)
+            .await?;
+        // Удаляем старые субстраты
+        sqlx::query("DELETE FROM substrate WHERE enzyme_entry = ?")
+            .bind(&enzyme.entry)
+            .execute(&mut *tx)
+            .await?;
+        // Удаляем старые продукты
+        sqlx::query("DELETE FROM product WHERE enzyme_entry = ?")
+            .bind(&enzyme.entry)
+            .execute(&mut *tx)
+            .await?;
+
+        // Вставляем новые имена
+        for name in &enzyme.names {
+            sqlx::query("INSERT INTO enzyme_names (entry, name) VALUES (?, ?)")
+                .bind(&enzyme.entry)
+                .bind(name)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Вставляем субстраты
+        for substrate_entry in &enzyme.substrates {
+            sqlx::query("INSERT INTO substrate (comp_entry, enzyme_entry) VALUES (?, ?)")
+                .bind(substrate_entry)
+                .bind(&enzyme.entry)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Вставляем продукты
+        for product_entry in &enzyme.products {
+            sqlx::query("INSERT INTO product (comp_entry, enzyme_entry) VALUES (?, ?)")
+                .bind(product_entry)
+                .bind(&enzyme.entry)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        println!("Enzyme {} updated successfully", enzyme.entry);
+        Ok(())
+    }
 }

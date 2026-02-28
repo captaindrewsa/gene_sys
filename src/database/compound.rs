@@ -41,4 +41,48 @@ impl DataBase {
         println!("Compound {} inserted successfully", compound.entry);
         Ok(())
     }
+
+    /// Обновление Compound и связанных имён
+    pub async fn update_compound(&self, compound: Compound) -> Result<(), Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // Проверяем, существует ли запись
+        let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM compound WHERE entry = ?")
+            .bind(&compound.entry)
+            .fetch_one(&mut *tx)
+            .await?;
+        if exists.0 == 0 {
+            return Ok(());
+        }
+
+        // Обновляем основные поля
+        sqlx::query(
+            "UPDATE compound SET formula = ?, exact_mass = ?, mol_weight = ? WHERE entry = ?"
+        )
+        .bind(&compound.formula)
+        .bind(compound.exact_mass)
+        .bind(compound.mol_weight)
+        .bind(&compound.entry)
+        .execute(&mut *tx)
+        .await?;
+
+        // Удаляем старые имена
+        sqlx::query("DELETE FROM compound_names WHERE entry = ?")
+            .bind(&compound.entry)
+            .execute(&mut *tx)
+            .await?;
+
+        // Вставляем новые имена
+        for name in &compound.names {
+            sqlx::query("INSERT INTO compound_names (entry, name) VALUES (?, ?)")
+                .bind(&compound.entry)
+                .bind(name)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        println!("Compound {} updated successfully", compound.entry);
+        Ok(())
+    }
 }
