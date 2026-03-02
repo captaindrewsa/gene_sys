@@ -11,6 +11,7 @@ const SCHEMA_SQL_PATH: &str = "src/database/sql/create_DB.sql";
 mod compound;
 mod enzyme;
 mod reaction;
+pub mod answers;
 
 // Реэкспортируем структуры, чтобы они были доступны извне как database::Compound и т.д.
 pub use compound::Compound;
