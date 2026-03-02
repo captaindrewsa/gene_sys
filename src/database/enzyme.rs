@@ -130,4 +130,47 @@ impl DataBase {
         println!("Enzyme {} updated successfully", enzyme.entry);
         Ok(())
     }
+
+    /// GET запрос
+    /// Загружает фермент по entry
+    /// Возвращает `None`, если запись не найдена.
+    pub async fn get_enzyme_by_entry(&self, entry: &str) -> Result<Option<Enzyme>, sqlx::Error> {
+        let row: Option<(String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT entry, sysname, reaction_iubmb FROM enzyme WHERE entry = ?"
+        )
+        .bind(entry)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some((entry, sysname, reaction_iubmb)) = row {
+            let names: Vec<String> = sqlx::query_scalar(
+                "SELECT name FROM enzyme_names WHERE entry = ?"
+            )
+            .bind(&entry)
+            .fetch_all(&self.pool)
+            .await?;
+            let substrates: Vec<String> = sqlx::query_scalar(
+                "SELECT comp_entry FROM substrate WHERE enzyme_entry = ?"
+            )
+            .bind(&entry)
+            .fetch_all(&self.pool)
+            .await?;
+            let products: Vec<String> = sqlx::query_scalar(
+                "SELECT comp_entry FROM product WHERE enzyme_entry = ?"
+            )
+            .bind(&entry)
+            .fetch_all(&self.pool)
+            .await?;
+            Ok(Some(Enzyme {
+                entry,
+                sysname,
+                reaction_iubmb,
+                names,
+                substrates,
+                products,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
 }

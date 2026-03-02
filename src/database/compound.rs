@@ -85,4 +85,34 @@ impl DataBase {
         println!("Compound {} updated successfully", compound.entry);
         Ok(())
     }
+
+    /// GET запрос
+    /// Загружает соединение по entry
+    /// Возвращает `None`, если запись не найдена.
+    pub async fn get_compound_by_entry(&self, entry: &str) -> Result<Option<Compound>, sqlx::Error> {
+        let row: Option<(String, Option<String>, Option<f64>, Option<f64>)> = sqlx::query_as(
+            "SELECT entry, formula, exact_mass, mol_weight FROM compound WHERE entry = ?"
+        )
+        .bind(entry)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some((entry, formula, exact_mass, mol_weight)) = row {
+            let names: Vec<String> = sqlx::query_scalar(
+                "SELECT name FROM compound_names WHERE entry = ?"
+            )
+            .bind(&entry)
+            .fetch_all(&self.pool)
+            .await?;
+            Ok(Some(Compound {
+                entry,
+                formula,
+                exact_mass,
+                mol_weight,
+                names,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
 }
