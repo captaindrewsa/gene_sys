@@ -28,6 +28,39 @@ pub struct DataBase{
     pool: SqlitePool, // пул для соединений для выполнения запросов к БД
 }
 
+
+/// Обёртка для различных типов данных, которые могут быть найдены по entry
+#[derive(Debug)]
+pub enum DataAnswer {
+    Compound(Compound),
+    Enzyme(Enzyme),
+    Reaction(Reaction),
+}
+
+/// Ошибки, возникающие при работе с базой данных
+#[derive(Debug)]
+pub enum DatabaseError {
+    Sqlx(sqlx::Error),
+    NotFound(String),
+}
+
+impl From<sqlx::Error> for DatabaseError {
+    fn from(err: sqlx::Error) -> Self {
+        DatabaseError::Sqlx(err)
+    }
+}
+
+impl std::fmt::Display for DatabaseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DatabaseError::Sqlx(e) => write!(f, "Database error: {}", e),
+            DatabaseError::NotFound(entry) => write!(f, "Entry not found: {}", entry),
+        }
+    }
+}
+
+impl std::error::Error for DatabaseError {}
+
 impl DataBase{
     // ==================== Инициализация ====================
 
@@ -64,6 +97,36 @@ impl DataBase{
         sqlx::query(&script).execute(&mut conn).await?;
         println!("Schema script executed successfully.");
         Ok(())
+    }
+
+    // ==================== Поиск по Entry ====================
+
+    /// Ищет запись по её entry-коду в таблицах compound, enzyme и reaction.
+    /// Возвращает `DataAnswer` с соответствующей структурой или ошибку `DatabaseError`.
+    pub async fn get_by_entry(&self, entry: &str) -> Result<DataAnswer, DatabaseError> {
+        // Поиск в compound
+        match self.get_compound_by_entry(entry).await {
+            Ok(Some(compound)) => return Ok(DataAnswer::Compound(compound)),
+            Ok(None) => {} // не найдено — идём дальше
+            Err(e) => return Err(DatabaseError::Sqlx(e)),
+        }
+
+        // Поиск в enzyme
+        match self.get_enzyme_by_entry(entry).await {
+            Ok(Some(enzyme)) => return Ok(DataAnswer::Enzyme(enzyme)),
+            Ok(None) => {}
+            Err(e) => return Err(DatabaseError::Sqlx(e)),
+        }
+
+        // Поиск в reaction
+        match self.get_reaction_by_entry(entry).await {
+            Ok(Some(reaction)) => return Ok(DataAnswer::Reaction(reaction)),
+            Ok(None) => {}
+            Err(e) => return Err(DatabaseError::Sqlx(e)),
+        }
+
+        // Ничего не найдено
+        Err(DatabaseError::NotFound(entry.to_string()))
     }
 
     //Ваша функция, которая делает что-то полезное
@@ -334,5 +397,39 @@ mod db_test{
 
         let result = db.update_reaction(updated_reaction).await;
         assert!(matches!(result, Ok(())));
+    }
+    
+    #[tokio::test]
+    async fn test_get_by_entry_autonomous() {
+        let db = DataBase::new().await.unwrap();
+
+        // Уникальный entry для теста
+        let test_entry = "C_GET_TEST_001";
+
+        // Вставляем соединение
+        let compound = Compound {
+            entry: test_entry.to_string(),
+            formula: Some("H2O".to_string()),
+            exact_mass: Some(18.0106),
+            mol_weight: Some(18.0153),
+            names: vec!["Water".to_string(), "Dihydrogen oxide".to_string()],
+        };
+        db.post_compound(compound.clone()).await.unwrap();
+
+        // Получаем его через get_by_entry
+        let result = db.get_by_entry(test_entry).await;
+        assert!(result.is_ok(), "get_by_entry failed: {:?}", result.err());
+
+        match result.unwrap() {
+            DataAnswer::Compound(found) => {
+                println!("Найдено соединение: {:?}", found);
+                assert_eq!(found.entry, test_entry);
+                assert_eq!(found.formula, compound.formula);
+                assert_eq!(found.exact_mass, compound.exact_mass);
+                assert_eq!(found.mol_weight, compound.mol_weight);
+                assert_eq!(found.names, compound.names);
+            }
+            other => panic!("Expected Compound, got {:?}", other),
+        }
     }
 }
