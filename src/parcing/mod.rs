@@ -149,4 +149,5 @@ mod tests {
     }
 }
 
+pub mod compound;
 pub mod enzyme;
